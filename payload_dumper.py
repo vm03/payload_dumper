@@ -46,6 +46,9 @@ def data_for_op(op,out_file):
         data = dec.decompress(data)
         out_file.seek(op.dst_extents[0].start_block*block_size)
         out_file.write(data)
+    elif op.type == op.REPLACE:
+        out_file.seek(op.dst_extents[0].start_block*block_size)
+        out_file.write(data)
     else:
         print ("Unsupported type = %d" % op.type)
 
