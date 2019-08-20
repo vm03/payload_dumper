@@ -38,10 +38,16 @@ def data_for_op(op):
 
     if op.type == op.REPLACE_XZ:
         dec = lzma.LZMADecompressor()
-        data = dec.decompress(data) 
+        data = dec.decompress(data)
+        out_file.seek(op.dst_extents[0].start_block*block_size)
+        out_file.write(data)
     elif op.type == op.REPLACE_BZ:
         dec = bz2.BZ2Decompressor()
-        data = dec.decompress(data) 
+        data = dec.decompress(data)
+        out_file.seek(op.dst_extents[0].start_block*block_size)
+        out_file.write(data)
+    else:
+        print ("Unsupported type = %d" % op.type)
 
     return data
 
@@ -53,10 +59,6 @@ def dump_part(part):
 
     for op in part.operations:
         data = data_for_op(op)
-        h.update(data)
-        out_file.write(data)
-
-    # assert h.digest() == part.new_partition_info.hash, 'partition hash mismatch'
 
 p = open(sys.argv[1], 'rb')
 
