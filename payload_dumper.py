@@ -58,7 +58,7 @@ def data_for_op(op,out_file):
 def dump_part(part):
     print(part.partition_name)
 
-    out_file = open('output/%s.img' % part.partition_name, 'wb')
+    out_file = open('%s/%s.img' % (args.out, part.partition_name), 'wb')
     h = hashlib.sha256()
 
     for op in part.operations:
@@ -68,6 +68,8 @@ def dump_part(part):
 parser = argparse.ArgumentParser(description='OTA payload dumper')
 parser.add_argument('payloadfile', type=argparse.FileType('rb'), 
                     help='payload file name')
+parser.add_argument('--out', default='output',
+                    help='output directory')
 args = parser.parse_args()
 
 magic = args.payloadfile.read(4)
