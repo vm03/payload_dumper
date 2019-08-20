@@ -3,6 +3,7 @@ import struct
 import hashlib
 import bz2
 import sys
+import argparse
 
 try:
     import lzma
@@ -31,8 +32,8 @@ def verify_contiguous(exts):
     return True
 
 def data_for_op(op,out_file):
-    p.seek(data_offset + op.data_offset)
-    data = p.read(op.data_length)
+    args.payloadfile.seek(data_offset + op.data_offset)
+    data = args.payloadfile.read(op.data_length)
 
     # assert hashlib.sha256(data).digest() == op.data_sha256_hash, 'operation data hash mismatch'
 
@@ -63,25 +64,29 @@ def dump_part(part):
     for op in part.operations:
         data = data_for_op(op,out_file)
 
-p = open(sys.argv[1], 'rb')
 
-magic = p.read(4)
+parser = argparse.ArgumentParser(description='OTA payload dumper')
+parser.add_argument('payloadfile', type=argparse.FileType('rb'), 
+                    help='payload file name')
+args = parser.parse_args()
+
+magic = args.payloadfile.read(4)
 assert magic == b'CrAU'
 
-file_format_version = u64(p.read(8))
+file_format_version = u64(args.payloadfile.read(8))
 assert file_format_version == 2
 
-manifest_size = u64(p.read(8))
+manifest_size = u64(args.payloadfile.read(8))
 
 metadata_signature_size = 0
 
 if file_format_version > 1:
-    metadata_signature_size = u32(p.read(4))
+    metadata_signature_size = u32(args.payloadfile.read(4))
 
-manifest = p.read(manifest_size)
-metadata_signature = p.read(metadata_signature_size)
+manifest = args.payloadfile.read(manifest_size)
+metadata_signature = args.payloadfile.read(metadata_signature_size)
 
-data_offset = p.tell()
+data_offset = args.payloadfile.tell()
 
 dam = um.DeltaArchiveManifest()
 dam.ParseFromString(manifest)
