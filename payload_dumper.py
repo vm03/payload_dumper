@@ -52,6 +52,7 @@ def data_for_op(op,out_file,old_file):
         out_file.write(data)
     else:
         print ("Unsupported type = %d" % op.type)
+        sys.exit(-1)
 
     return data
 
