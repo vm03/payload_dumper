@@ -31,7 +31,7 @@ def verify_contiguous(exts):
 
     return True
 
-def data_for_op(op,out_file):
+def data_for_op(op,out_file,old_file):
     args.payloadfile.seek(data_offset + op.data_offset)
     data = args.payloadfile.read(op.data_length)
 
@@ -61,15 +61,24 @@ def dump_part(part):
     out_file = open('%s/%s.img' % (args.out, part.partition_name), 'wb')
     h = hashlib.sha256()
 
+    if args.diff:
+        old_file = open('%s/%s.img' % (args.old, part.partition_name), 'rb')
+    else:
+        old_file = None
+
     for op in part.operations:
-        data = data_for_op(op,out_file)
+        data = data_for_op(op,out_file,old_file)
 
 
 parser = argparse.ArgumentParser(description='OTA payload dumper')
 parser.add_argument('payloadfile', type=argparse.FileType('rb'), 
                     help='payload file name')
 parser.add_argument('--out', default='output',
-                    help='output directory')
+                    help='output directory (defaul: output)')
+parser.add_argument('--diff',action='store_true',
+                    help='extract differential OTA, you need put original images to old dir')
+parser.add_argument('--old', default='old',
+                    help='directory with original images for differential OTA (defaul: old)')
 args = parser.parse_args()
 
 magic = args.payloadfile.read(4)
