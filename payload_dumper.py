@@ -4,6 +4,8 @@ import hashlib
 import bz2
 import sys
 import argparse
+import bsdiff4
+import io
 
 try:
     import lzma
@@ -50,6 +52,38 @@ def data_for_op(op,out_file,old_file):
     elif op.type == op.REPLACE:
         out_file.seek(op.dst_extents[0].start_block*block_size)
         out_file.write(data)
+    elif op.type == op.SOURCE_COPY:
+        if not args.diff:
+            print ("SOURCE_COPY supported only for differential OTA")
+            sys.exit(-2)
+        out_file.seek(op.dst_extents[0].start_block*block_size)
+        for ext in op.src_extents:
+            old_file.seek(ext.start_block*block_size)
+            data = old_file.read(ext.num_blocks*block_size)
+            out_file.write(data)
+    elif op.type == op.SOURCE_BSDIFF:
+        if not args.diff:
+            print ("SOURCE_BSDIFF supported only for differential OTA")
+            sys.exit(-3)
+        out_file.seek(op.dst_extents[0].start_block*block_size)
+        tmp_buff = io.BytesIO()
+        for ext in op.src_extents:
+            old_file.seek(ext.start_block*block_size)
+            old_data = old_file.read(ext.num_blocks*block_size)
+            tmp_buff.write(old_data)
+        tmp_buff.seek(0)
+        old_data = tmp_buff.read()
+        data = bsdiff4.patch(old_data, data)
+        tmp_buff.seek(0)
+        tmp_buff.write(data)
+        n = 0;
+        tmp_buff.seek(0)
+        for ext in op.dst_extents:
+            tmp_buff.seek(n*block_size)
+            n += ext.num_blocks
+            data = tmp_buff.read(ext.num_blocks*block_size)
+            out_file.seek(ext.start_block*block_size)
+            out_file.write(data)
     else:
         print ("Unsupported type = %d" % op.type)
         sys.exit(-1)
