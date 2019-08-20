@@ -30,7 +30,7 @@ def verify_contiguous(exts):
 
     return True
 
-def data_for_op(op):
+def data_for_op(op,out_file):
     p.seek(data_offset + op.data_offset)
     data = p.read(op.data_length)
 
@@ -58,7 +58,7 @@ def dump_part(part):
     h = hashlib.sha256()
 
     for op in part.operations:
-        data = data_for_op(op)
+        data = data_for_op(op,out_file)
 
 p = open(sys.argv[1], 'rb')
 
@@ -82,6 +82,7 @@ data_offset = p.tell()
 
 dam = um.DeltaArchiveManifest()
 dam.ParseFromString(manifest)
+block_size = dam.block_size
 
 for part in dam.partitions:
     # for op in part.operations:
