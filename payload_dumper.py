@@ -73,9 +73,8 @@ def data_for_op(op,out_file,old_file):
             tmp_buff.write(old_data)
         tmp_buff.seek(0)
         old_data = tmp_buff.read()
-        data = bsdiff4.patch(old_data, data)
         tmp_buff.seek(0)
-        tmp_buff.write(data)
+        tmp_buff.write(bsdiff4.patch(old_data, data))
         n = 0;
         tmp_buff.seek(0)
         for ext in op.dst_extents:
