@@ -91,7 +91,8 @@ def data_for_op(op,out_file,old_file):
     return data
 
 def dump_part(part):
-    print(part.partition_name)
+    sys.stdout.write("Processing %s partition" % part.partition_name)
+    sys.stdout.flush()
 
     out_file = open('%s/%s.img' % (args.out, part.partition_name), 'wb')
     h = hashlib.sha256()
@@ -103,6 +104,10 @@ def dump_part(part):
 
     for op in part.operations:
         data = data_for_op(op,out_file,old_file)
+        sys.stdout.write(".")
+        sys.stdout.flush()
+
+    print("Done")
 
 
 parser = argparse.ArgumentParser(description='OTA payload dumper')
