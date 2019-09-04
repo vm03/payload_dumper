@@ -17,10 +17,10 @@ Script tested on Yandex Amber OTA's (full and incremental) under Linux(but may w
 ### Full OTA
 
 - When that’s finished, enter this command: python payload_dumper.py payload.bin
-- This will start to extract the images within the payload.bin file to the out folder you are in.
+- This will start to extract the images within the payload.bin file to the output folder you are in.
 
 ### Incremental OTA
 
-- Copy original images (from full OTA or dumped from devices) to old dir (with part name + .img, ex: boot.img, system.img)
+- Copy original images (from full OTA or dumped from devices) to old folder (with part name + .img, ex: boot.img, system.img)
 - run python payload_dumper.py --diff payload.bin
-- file extracted to the out folder you are in.
+- file extracted to the output folder you are in.
