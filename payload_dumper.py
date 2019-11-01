@@ -86,7 +86,7 @@ def data_for_op(op,out_file,old_file):
     elif op.type == op.ZERO:
         for ext in op.dst_extents:
             out_file.seek(ext.start_block*block_size)
-            out_file.write('\0' * ext.num_blocks*block_size)
+            out_file.write(b'\x00' * ext.num_blocks*block_size)
     else:
         print ("Unsupported type = %d" % op.type)
         sys.exit(-1)
