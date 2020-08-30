@@ -6,7 +6,7 @@ import sys
 import argparse
 import bsdiff4
 import io
-
+import os
 try:
     import lzma
 except ImportError:
@@ -114,7 +114,7 @@ def dump_part(part):
 
 
 parser = argparse.ArgumentParser(description='OTA payload dumper')
-parser.add_argument('payloadfile', type=argparse.FileType('rb'), 
+parser.add_argument('payloadfile', type=argparse.FileType('rb'),
                     help='payload file name')
 parser.add_argument('--out', default='output',
                     help='output directory (defaul: output)')
@@ -123,6 +123,10 @@ parser.add_argument('--diff',action='store_true',
 parser.add_argument('--old', default='old',
                     help='directory with original images for differential OTA (defaul: old)')
 args = parser.parse_args()
+
+#Check for --out directory exists
+if not os.path.exists(args.out):
+    os.makedirs(args.out)
 
 magic = args.payloadfile.read(4)
 assert magic == b'CrAU'
