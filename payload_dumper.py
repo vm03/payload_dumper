@@ -122,6 +122,8 @@ parser.add_argument('--diff',action='store_true',
                     help='extract differential OTA, you need put original images to old dir')
 parser.add_argument('--old', default='old',
                     help='directory with original images for differential OTA (defaul: old)')
+parser.add_argument('--images', default="",
+                    help='images to extract (default: empty)')
 args = parser.parse_args()
 
 #Check for --out directory exists
@@ -150,12 +152,15 @@ dam = um.DeltaArchiveManifest()
 dam.ParseFromString(manifest)
 block_size = dam.block_size
 
-for part in dam.partitions:
-    # for op in part.operations:
-    #     assert op.type in (op.REPLACE, op.REPLACE_BZ, op.REPLACE_XZ), \
-    #             'unsupported op'
+if args.images == "":
+    for part in dam.partitions:
+        dump_part(part)
+else:
+    images = args.images.split(",")
+    for image in images:
+        partition = [part for part in dam.partitions if part.partition_name == image]
+        if partition:
+            dump_part(partition[0])
+        else:
+            sys.stderr.write("Partition %s not found in payload!\n" % image)
 
-    # extents = flatten([op.dst_extents for op in part.operations])
-    # assert verify_contiguous(extents), 'operations do not span full image'
-
-    dump_part(part)
