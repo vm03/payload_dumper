@@ -9,7 +9,10 @@ Script tested on Yandex Amber OTA's (full and incremental) under Linux(but may w
 ### Docker
 
 Alternatively you can use Docker:
-
+```
+docker run --rm -v "${PWD}":/app -it vm03/payload_dumper
+```
+or self build Docker image 
 ```
 # build the container image
 $ docker build -t payload_dumper .
