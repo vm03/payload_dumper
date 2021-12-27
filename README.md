@@ -6,6 +6,19 @@ Script tested on Yandex Amber OTA's (full and incremental) under Linux(but may w
 - Python3, pip
 - google protobuf for python `pip install protobuf`
 
+### Docker
+
+Alternatively you can use Docker:
+
+```
+# build the container image
+$ docker build -t payload_dumper .
+
+# mount current PWD and pass payload.bin
+$ docker run --rm -v "${PWD}":/app -it payload_dumper payload.bin
+
+```
+
 ## Guide
 
 - Make you sure you have Python 3.6 installed.

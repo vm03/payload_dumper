@@ -7,3 +7,5 @@
 !update_metadata_pb2.py
 !output/.gitkeep
 !README.md
+!Dockerfile
+!.dockerignore
