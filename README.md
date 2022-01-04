@@ -10,7 +10,7 @@ Script tested on Yandex Amber OTA's (full and incremental) under Linux(but may w
 
 Alternatively you can use Docker:
 ```
-docker run --rm -v "${PWD}":/app -it vm03/payload_dumper
+docker run --rm -v "${PWD}":/data -it vm03/payload_dumper /data/payload.bin --out /data
 ```
 or self build Docker image 
 ```
@@ -18,7 +18,7 @@ or self build Docker image
 $ docker build -t payload_dumper .
 
 # mount current PWD and pass payload.bin
-$ docker run --rm -v "${PWD}":/app -it payload_dumper payload.bin
+$ docker run --rm -v "${PWD}":/data -it payload_dumper /data/payload.bin --out /data
 
 ```
 
