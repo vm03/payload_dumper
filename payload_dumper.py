@@ -4,7 +4,6 @@ import hashlib
 import bz2
 import sys
 import argparse
-import bsdiff4
 import io
 import os
 try:
