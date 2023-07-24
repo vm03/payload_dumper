@@ -5,6 +5,7 @@ Script tested on Yandex Amber OTA's (full and incremental) under Linux(but may w
 
 - Python3, pip
 - google protobuf for python `pip install protobuf`
+- binary diff and patch for python `pip install bsdiff4`
 
 ### Docker
 
