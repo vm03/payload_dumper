@@ -1,5 +1,5 @@
 # payload dumper
-Script tested on Yandex Amber OTA's (full and incremental) under Linux(but may works on Windows too)
+Script tested on Yandex Amber OTA's (full and incremental) under Linux (but may works on Windows too)
 
 ## System requirement
 
@@ -9,23 +9,22 @@ Script tested on Yandex Amber OTA's (full and incremental) under Linux(but may w
 ### Docker
 
 Alternatively you can use Docker:
-```
+```bash
 docker run --rm -v "${PWD}":/data -it vm03/payload_dumper /data/payload.bin --out /data
 ```
 or self build Docker image 
-```
+```bash
 # build the container image
 $ docker build -t payload_dumper .
 
 # mount current PWD and pass payload.bin
 $ docker run --rm -v "${PWD}":/data -it payload_dumper /data/payload.bin --out /data
-
 ```
 
 ## Guide
 
 ### Preparation
-- Make you sure you have Python 3.6 or later installed.
+- Make sure you have Python 3.6 or later installed.
 - Download payload_dumper.py, update_metadata_pb2.py and requirements.txt
 - Extract your OTA zip and place payload.bin in the same folder as these files.
 - Open PowerShell, Command Prompt, or Terminal depending on your OS.
