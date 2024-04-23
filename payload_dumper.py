@@ -24,20 +24,15 @@ def u64(x):
 
 def verify_contiguous(exts):
     blocks = 0
-
     for ext in exts:
         if ext.start_block != blocks:
             return False
-
         blocks += ext.num_blocks
-
     return True
 
-def data_for_op(op,out_file,old_file):
+def data_for_op(op, out_file, old_file):
     args.payloadfile.seek(data_offset + op.data_offset)
     data = args.payloadfile.read(op.data_length)
-
-    # assert hashlib.sha256(data).digest() == op.data_sha256_hash, 'operation data hash mismatch'
 
     if op.type == op.REPLACE_XZ:
         dec = lzma.LZMADecompressor()
@@ -54,7 +49,7 @@ def data_for_op(op,out_file,old_file):
         out_file.write(data)
     elif op.type == op.SOURCE_COPY:
         if not args.diff:
-            print ("SOURCE_COPY supported only for differential OTA")
+            print("SOURCE_COPY supported only for differential OTA")
             sys.exit(-2)
         out_file.seek(op.dst_extents[0].start_block*block_size)
         for ext in op.src_extents:
@@ -63,7 +58,7 @@ def data_for_op(op,out_file,old_file):
             out_file.write(data)
     elif op.type == op.SOURCE_BSDIFF:
         if not args.diff:
-            print ("SOURCE_BSDIFF supported only for differential OTA")
+            print("SOURCE_BSDIFF supported only for differential OTA")
             sys.exit(-3)
         out_file.seek(op.dst_extents[0].start_block*block_size)
         tmp_buff = io.BytesIO()
@@ -75,7 +70,7 @@ def data_for_op(op,out_file,old_file):
         old_data = tmp_buff.read()
         tmp_buff.seek(0)
         tmp_buff.write(bsdiff4.patch(old_data, data))
-        n = 0;
+        n = 0
         tmp_buff.seek(0)
         for ext in op.dst_extents:
             tmp_buff.seek(n*block_size)
@@ -88,7 +83,7 @@ def data_for_op(op,out_file,old_file):
             out_file.seek(ext.start_block*block_size)
             out_file.write(b'\x00' * ext.num_blocks*block_size)
     else:
-        print ("Unsupported type = %d" % op.type)
+        print("Unsupported type = %d" % op.type)
         sys.exit(-1)
 
     return data
@@ -106,27 +101,38 @@ def dump_part(part):
         old_file = None
 
     for op in part.operations:
-        data = data_for_op(op,out_file,old_file)
+        data = data_for_op(op, out_file, old_file)
         sys.stdout.write(".")
         sys.stdout.flush()
 
     print("Done")
 
+def diffpartname(dam):
+    diff_partitions = []
+    for part in dam.partitions:
+        for op in part.operations:
+            if op.type in [op.SOURCE_COPY, op.SOURCE_BSDIFF]:
+                diff_partitions.append(part.partition_name)
+                break
+    diff_partitions = list(set(diff_partitions))
+    for partition_name in diff_partitions:
+        print(partition_name)
 
 parser = argparse.ArgumentParser(description='OTA payload dumper')
 parser.add_argument('payloadfile', type=argparse.FileType('rb'),
                     help='payload file name')
 parser.add_argument('--out', default='output',
-                    help='output directory (defaul: output)')
-parser.add_argument('--diff',action='store_true',
+                    help='output directory (default: output)')
+parser.add_argument('--diff', action='store_true',
                     help='extract differential OTA, you need put original images to old dir')
 parser.add_argument('--old', default='old',
-                    help='directory with original images for differential OTA (defaul: old)')
+                    help='directory with original images for differential OTA (default: old)')
 parser.add_argument('--images', default="",
                     help='images to extract (default: empty)')
+parser.add_argument('--diffpartname', action='store_true',
+                    help='dump partition name in diff type payload')
 args = parser.parse_args()
 
-#Check for --out directory exists
 if not os.path.exists(args.out):
     os.makedirs(args.out)
 
@@ -152,15 +158,17 @@ dam = um.DeltaArchiveManifest()
 dam.ParseFromString(manifest)
 block_size = dam.block_size
 
-if args.images == "":
-    for part in dam.partitions:
-        dump_part(part)
+if args.diffpartname:
+    diffpartname(dam)
 else:
-    images = args.images.split(",")
-    for image in images:
-        partition = [part for part in dam.partitions if part.partition_name == image]
-        if partition:
-            dump_part(partition[0])
-        else:
-            sys.stderr.write("Partition %s not found in payload!\n" % image)
-
+    if args.images == "":
+        for part in dam.partitions:
+            dump_part(part)
+    else:
+        images = args.images.split(",")
+        for image in images:
+            partition = [part for part in dam.partitions if part.partition_name == image]
+            if partition:
+                dump_part(partition[0])
+            else:
+                sys.stderr.write("Partition %s not found in payload!\n" % image)
