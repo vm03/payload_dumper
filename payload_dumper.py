@@ -7,12 +7,15 @@ import argparse
 import bsdiff4
 import io
 import os
+import brotli
 try:
     import lzma
 except ImportError:
     from backports import lzma
 
 import update_metadata_pb2 as um
+
+BSDF2_MAGIC = b'BSDF2'
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
@@ -21,6 +24,46 @@ def u32(x):
 
 def u64(x):
     return struct.unpack('>Q', x)[0]
+
+def bsdf2_decompress(alg, data):
+    if alg == 0:
+        return data
+    elif alg == 1:
+        return bz2.decompress(data)
+    elif alg == 2:
+        return brotli.decompress(data)
+
+# Adapted from bsdiff4.read_patch
+def bsdf2_read_patch(fi):
+    """read a bsdiff/BSDF2-format patch from stream 'fi'
+    """
+    magic = fi.read(8)
+    if magic == bsdiff4.format.MAGIC:
+        # bsdiff4 uses bzip2 (algorithm 1)
+        alg_control = alg_diff = alg_extra = 1
+    elif magic[:5] == BSDF2_MAGIC:
+        alg_control = magic[5]
+        alg_diff = magic[6]
+        alg_extra = magic[7]
+    else:
+        raise ValueError("incorrect magic bsdiff/BSDF2 header")
+
+    # length headers
+    len_control = bsdiff4.core.decode_int64(fi.read(8))
+    len_diff = bsdiff4.core.decode_int64(fi.read(8))
+    len_dst = bsdiff4.core.decode_int64(fi.read(8))
+
+    # read the control header
+    bcontrol = bsdf2_decompress(alg_control, fi.read(len_control))
+    tcontrol = [(bsdiff4.core.decode_int64(bcontrol[i:i + 8]),
+                 bsdiff4.core.decode_int64(bcontrol[i + 8:i + 16]),
+                 bsdiff4.core.decode_int64(bcontrol[i + 16:i + 24]))
+                for i in range(0, len(bcontrol), 24)]
+
+    # read the diff and extra blocks
+    bdiff = bsdf2_decompress(alg_diff, fi.read(len_diff))
+    bextra = bsdf2_decompress(alg_extra, fi.read())
+    return len_dst, tcontrol, bdiff, bextra
 
 def verify_contiguous(exts):
     blocks = 0
@@ -61,9 +104,9 @@ def data_for_op(op,out_file,old_file):
             old_file.seek(ext.start_block*block_size)
             data = old_file.read(ext.num_blocks*block_size)
             out_file.write(data)
-    elif op.type == op.SOURCE_BSDIFF:
+    elif op.type in (op.SOURCE_BSDIFF, op.BROTLI_BSDIFF):
         if not args.diff:
-            print ("SOURCE_BSDIFF supported only for differential OTA")
+            print ("BSDIFF supported only for differential OTA")
             sys.exit(-3)
         out_file.seek(op.dst_extents[0].start_block*block_size)
         tmp_buff = io.BytesIO()
@@ -74,7 +117,7 @@ def data_for_op(op,out_file,old_file):
         tmp_buff.seek(0)
         old_data = tmp_buff.read()
         tmp_buff.seek(0)
-        tmp_buff.write(bsdiff4.patch(old_data, data))
+        tmp_buff.write(bsdiff4.core.patch(old_data, *bsdf2_read_patch(io.BytesIO(data))))
         n = 0;
         tmp_buff.seek(0)
         for ext in op.dst_extents:
