@@ -8,6 +8,7 @@ import bsdiff4
 import io
 import os
 import brotli
+import zipfile
 try:
     import lzma
 except ImportError:
@@ -172,6 +173,10 @@ args = parser.parse_args()
 #Check for --out directory exists
 if not os.path.exists(args.out):
     os.makedirs(args.out)
+
+if zipfile.is_zipfile(args.payloadfile):
+    args.payloadfile = zipfile.ZipFile(args.payloadfile).open("payload.bin")
+args.payloadfile.seek(0)
 
 magic = args.payloadfile.read(4)
 assert magic == b'CrAU'
