@@ -9,6 +9,7 @@ import io
 import os
 import brotli
 import zipfile
+import zstandard
 try:
     import lzma
 except ImportError:
@@ -85,6 +86,11 @@ def data_for_op(op,out_file,old_file):
 
     if op.type == op.REPLACE_XZ:
         dec = lzma.LZMADecompressor()
+        data = dec.decompress(data)
+        out_file.seek(op.dst_extents[0].start_block*block_size)
+        out_file.write(data)
+    elif op.type == op.ZSTD:
+        dec = zstandard.ZstdDecompressor().decompressobj()
         data = dec.decompress(data)
         out_file.seek(op.dst_extents[0].start_block*block_size)
         out_file.write(data)
