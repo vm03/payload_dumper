@@ -81,7 +81,8 @@ def data_for_op(op,out_file,old_file):
     args.payloadfile.seek(data_offset + op.data_offset)
     data = args.payloadfile.read(op.data_length)
 
-    # assert hashlib.sha256(data).digest() == op.data_sha256_hash, 'operation data hash mismatch'
+    if op.data_sha256_hash:
+        assert hashlib.sha256(data).digest() == op.data_sha256_hash, 'operation data hash mismatch'
 
     if op.type == op.REPLACE_XZ:
         dec = lzma.LZMADecompressor()
