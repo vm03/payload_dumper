@@ -144,8 +144,14 @@ def data_for_op(op,out_file,old_file):
 
     return data
 
+from tqdm import tqdm
+Colors = {
+    "Reset": "\033[0m",
+    "Green": "\033[1;32m",
+    "Red": "\033[1;31m"
+}
+
 def dump_part(part):
-    sys.stdout.write("Processing %s partition" % part.partition_name)
     sys.stdout.flush()
 
     out_file = open('%s/%s.img' % (args.out, part.partition_name), 'wb')
@@ -156,12 +162,14 @@ def dump_part(part):
     else:
         old_file = None
 
-    for op in part.operations:
-        data = data_for_op(op,out_file,old_file)
-        sys.stdout.write(".")
-        sys.stdout.flush()
+    with tqdm(total=len(part.operations), unit='ops', desc=f"{Colors['Green']}Partition{Colors['Reset']} {Colors['Red']}{part.partition_name.capitalize()}{Colors['Reset']}") as pbar:
+        for op in part.operations:
+            data = data_for_op(op,out_file,old_file)
+            h.update(data)
+            pbar.update(1)
 
-    print("Done")
+    print(f'{Colors["Reset"]}[{Colors["Green"]}Done{Colors["Reset"]}!]')
+
 
 
 parser = argparse.ArgumentParser(description='OTA payload dumper')
