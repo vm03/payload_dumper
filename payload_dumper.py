@@ -10,6 +10,10 @@ import os
 import brotli
 import zipfile
 import zstandard
+import fsspec
+import urllib.parse
+from pathlib import Path
+
 try:
     import lzma
 except ImportError:
@@ -78,9 +82,53 @@ def verify_contiguous(exts):
 
     return True
 
-def data_for_op(op,out_file,old_file):
-    args.payloadfile.seek(data_offset + op.data_offset)
-    data = args.payloadfile.read(op.data_length)
+def open_payload_file(file_path):
+    """
+    Opens a payload file, whether it's a local file, a remote file,
+    or inside a zip archive (local or remote).
+    
+    Returns a file-like object pointing to the payload.bin content.
+    """
+    # Check if the file is a URL
+    is_url = file_path.startswith(('http://', 'https://', 's3://', 'gs://'))
+    
+    if is_url:
+        # Handle remote file
+        protocol = urllib.parse.urlparse(file_path).scheme
+        fs = fsspec.filesystem(protocol)
+        
+        # Open the remote file
+        remote_file = fs.open(file_path)
+        
+        # Check if it's a zip file
+        if zipfile.is_zipfile(remote_file):
+            # Reset the file pointer
+            remote_file.seek(0)
+            
+            # Open as a zip file and extract payload.bin
+            with zipfile.ZipFile(remote_file) as zf:
+                if "payload.bin" in zf.namelist():
+                    return zf.open("payload.bin")
+                else:
+                    raise ValueError("payload.bin not found in zip file")
+        else:
+            # Not a zip file, use as is
+            return remote_file
+    else:
+        # Local file
+        if zipfile.is_zipfile(file_path):
+            with zipfile.ZipFile(file_path) as zf:
+                if "payload.bin" in zf.namelist():
+                    return zf.open("payload.bin")
+                else:
+                    raise ValueError("payload.bin not found in zip file")
+        else:
+            # Local file, not a zip
+            return open(file_path, 'rb')
+
+def data_for_op(op, payload_file, out_file, old_file, data_offset, block_size):
+    payload_file.seek(data_offset + op.data_offset)
+    data = payload_file.read(op.data_length)
 
     if op.data_sha256_hash:
         assert hashlib.sha256(data).digest() == op.data_sha256_hash, 'operation data hash mismatch'
@@ -104,8 +152,8 @@ def data_for_op(op,out_file,old_file):
         out_file.seek(op.dst_extents[0].start_block*block_size)
         out_file.write(data)
     elif op.type == op.SOURCE_COPY:
-        if not args.diff:
-            print ("SOURCE_COPY supported only for differential OTA")
+        if not old_file:
+            print("SOURCE_COPY supported only for differential OTA")
             sys.exit(-2)
         out_file.seek(op.dst_extents[0].start_block*block_size)
         for ext in op.src_extents:
@@ -113,8 +161,8 @@ def data_for_op(op,out_file,old_file):
             data = old_file.read(ext.num_blocks*block_size)
             out_file.write(data)
     elif op.type in (op.SOURCE_BSDIFF, op.BROTLI_BSDIFF):
-        if not args.diff:
-            print ("BSDIFF supported only for differential OTA")
+        if not old_file:
+            print("BSDIFF supported only for differential OTA")
             sys.exit(-3)
         out_file.seek(op.dst_extents[0].start_block*block_size)
         tmp_buff = io.BytesIO()
@@ -126,7 +174,7 @@ def data_for_op(op,out_file,old_file):
         old_data = tmp_buff.read()
         tmp_buff.seek(0)
         tmp_buff.write(bsdiff4.core.patch(old_data, *bsdf2_read_patch(io.BytesIO(data))))
-        n = 0;
+        n = 0
         tmp_buff.seek(0)
         for ext in op.dst_extents:
             tmp_buff.seek(n*block_size)
@@ -139,83 +187,96 @@ def data_for_op(op,out_file,old_file):
             out_file.seek(ext.start_block*block_size)
             out_file.write(b'\x00' * ext.num_blocks*block_size)
     else:
-        print ("Unsupported type = %d" % op.type)
+        print("Unsupported type = %d" % op.type)
         sys.exit(-1)
 
     return data
 
-def dump_part(part):
-    sys.stdout.write("Processing %s partition" % part.partition_name)
+def dump_part(part, payload_file, data_offset, block_size, out_dir, old_dir=None, use_diff=False):
+    sys.stdout.write(f"Processing {part.partition_name} partition")
     sys.stdout.flush()
 
-    out_file = open('%s/%s.img' % (args.out, part.partition_name), 'wb')
-    h = hashlib.sha256()
-
-    if args.diff:
-        old_file = open('%s/%s.img' % (args.old, part.partition_name), 'rb')
+    # Ensure output directory exists
+    Path(out_dir).mkdir(exist_ok=True)
+    
+    out_file = open(f'{out_dir}/{part.partition_name}.img', 'wb')
+    
+    if use_diff:
+        old_file_path = f'{old_dir}/{part.partition_name}.img'
+        if os.path.exists(old_file_path):
+            old_file = open(old_file_path, 'rb')
+        else:
+            print(f"\nWarning: Original image {old_file_path} not found for differential OTA")
+            old_file = None
     else:
         old_file = None
 
     for op in part.operations:
-        data = data_for_op(op,out_file,old_file)
+        data = data_for_op(op, payload_file, out_file, old_file, data_offset, block_size)
         sys.stdout.write(".")
         sys.stdout.flush()
-
+    
+    out_file.close()
+    if old_file:
+        old_file.close()
+    
     print("Done")
 
+def main():
+    parser = argparse.ArgumentParser(description='OTA payload dumper')
+    parser.add_argument('payload_path', type=str,
+                        help='payload file path or URL (can be a zip file)')
+    parser.add_argument('--out', default='output',
+                        help='output directory (default: output)')
+    parser.add_argument('--diff', action='store_true',
+                        help='extract differential OTA, you need put original images to old dir')
+    parser.add_argument('--old', default='old',
+                        help='directory with original images for differential OTA (default: old)')
+    parser.add_argument('--images', default="",
+                        help='comma-separated list of images to extract (default: all)')
+    args = parser.parse_args()
 
-parser = argparse.ArgumentParser(description='OTA payload dumper')
-parser.add_argument('payloadfile', type=argparse.FileType('rb'),
-                    help='payload file name')
-parser.add_argument('--out', default='output',
-                    help='output directory (defaul: output)')
-parser.add_argument('--diff',action='store_true',
-                    help='extract differential OTA, you need put original images to old dir')
-parser.add_argument('--old', default='old',
-                    help='directory with original images for differential OTA (defaul: old)')
-parser.add_argument('--images', default="",
-                    help='images to extract (default: empty)')
-args = parser.parse_args()
+    # Ensure output directory exists
+    if not os.path.exists(args.out):
+        os.makedirs(args.out)
 
-#Check for --out directory exists
-if not os.path.exists(args.out):
-    os.makedirs(args.out)
+    # Open the payload file (handles local/remote and zip/non-zip)
+    with open_payload_file(args.payload_path) as payload_file:
+        # Read and verify the magic header
+        magic = payload_file.read(4)
+        assert magic == b'CrAU', "Invalid magic header, not an OTA payload"
 
-if zipfile.is_zipfile(args.payloadfile):
-    args.payloadfile = zipfile.ZipFile(args.payloadfile).open("payload.bin")
-args.payloadfile.seek(0)
+        file_format_version = u64(payload_file.read(8))
+        assert file_format_version == 2, f"Unsupported file format version: {file_format_version}"
 
-magic = args.payloadfile.read(4)
-assert magic == b'CrAU'
+        manifest_size = u64(payload_file.read(8))
 
-file_format_version = u64(args.payloadfile.read(8))
-assert file_format_version == 2
+        metadata_signature_size = 0
+        if file_format_version > 1:
+            metadata_signature_size = u32(payload_file.read(4))
 
-manifest_size = u64(args.payloadfile.read(8))
+        manifest = payload_file.read(manifest_size)
+        metadata_signature = payload_file.read(metadata_signature_size)
 
-metadata_signature_size = 0
+        data_offset = payload_file.tell()
 
-if file_format_version > 1:
-    metadata_signature_size = u32(args.payloadfile.read(4))
+        dam = um.DeltaArchiveManifest()
+        dam.ParseFromString(manifest)
+        block_size = dam.block_size
 
-manifest = args.payloadfile.read(manifest_size)
-metadata_signature = args.payloadfile.read(metadata_signature_size)
-
-data_offset = args.payloadfile.tell()
-
-dam = um.DeltaArchiveManifest()
-dam.ParseFromString(manifest)
-block_size = dam.block_size
-
-if args.images == "":
-    for part in dam.partitions:
-        dump_part(part)
-else:
-    images = args.images.split(",")
-    for image in images:
-        partition = [part for part in dam.partitions if part.partition_name == image]
-        if partition:
-            dump_part(partition[0])
+        if args.images == "":
+            for part in dam.partitions:
+                dump_part(part, payload_file, data_offset, block_size, args.out, 
+                        args.old if args.diff else None, args.diff)
         else:
-            sys.stderr.write("Partition %s not found in payload!\n" % image)
+            images = args.images.split(",")
+            for image in images:
+                partition = [part for part in dam.partitions if part.partition_name == image]
+                if partition:
+                    dump_part(partition[0], payload_file, data_offset, block_size, args.out,
+                            args.old if args.diff else None, args.diff)
+                else:
+                    sys.stderr.write(f"Partition {image} not found in payload!\n")
 
+if __name__ == "__main__":
+    main()
